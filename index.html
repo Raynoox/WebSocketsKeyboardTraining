@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 13px Helvetica, Arial; }
+      form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+      form input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
+      form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+      #messages { list-style-type: none; margin: 0; padding: 0; }
+      #messages li { padding: 5px 10px; }
+      #messages li:nth-child(odd) { background: #eee; }
+    </style>
+  </head>
+  
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+<script>
+    var socket = io();
+    var rooms = [];
+    var connectedRoom = 'NONE';
+    var playerId = '';
+    var colours = ['red','blue','green','orange','purple','black','pink'];
+    $(function() {
+    $('form').submit(function() {
+        socket.emit('answer', {text: $('#m').val(), pid: playerId, sid: sessionStorage.getItem('socket-id'), room: connectedRoom});
+        $('#m').val('');
+        return false;
+    });
+    });
+    var createRoom = function() {
+      console.log("create room");
+      socket.emit('create room', "this user id");
+      return false;
+    };
+    var startGame = function() {
+      if(connectedRoom !== 'NONE'){
+        socket.emit('start game', connectedRoom);
+      }
+    };
+    
+    var joinRoom = function(id) {
+      console.log("joining room "+id);
+      socket.emit('join room', {sid:sessionStorage.getItem('socket-id'),roomid: id});
+      return false;
+    }
+    socket.on('connect', function(x) {
+        console.log("hehe");
+        if(sessionStorage.getItem('socket-id') == null || sessionStorage.getItem('socket-id')==='undefined'){
+            console.log("blabla"+socket.id);
+            sessionStorage.setItem('socket-id',socket.id);
+        }
+        socket.emit('get rooms', socket.id);
+        console.log('check if user connected to room');
+        socket.emit('check user', sessionStorage.getItem('socket-id'));
+    });
+    socket.on('game update', function(gameState) {
+        console.log('got update');
+        console.log(gameState);
+        drawGame(gameState);
+    });
+    socket.on('room update', function(msg) {
+      console.log(msg);
+      $('#rooms').empty();
+      var i =0;
+      for(i = 0;i< msg.length;i++){
+      for(var j =0;j<msg[i].players.length;j++) {
+        if(msg[i].players[j].sid === sessionStorage.getItem('socket-id')){
+            connectedRoom = i;
+            playerId = j+1  ;
+            break;
+        }
+      }
+      var status = msg[i].status === 0 ? 'not stated' : msg[i].status === 1 ? 'ONGOING' : 'idle';
+      $('#rooms').append($('<button id="btn'+i+'" onClick="joinRoom('+i+')">').text(msg[i].roomName));
+      $('#rooms').append($('<div id="cnt'+i+'"></div>').text('players number: '+msg[i].players.length+' - status: '+status));
+      }
+      $('#roomNumber').text('Connected to room number '+connectedRoom+'as player '+playerId);
+    });
+    var drawGame = function(game) {
+        var c = document.getElementById("myCanvas");
+        var ctx = c.getContext("2d");
+        ctx.clearRect(0, 0, 800, 600);
+
+        ctx.font = "30px Arial";
+        ctx.fillStyle = colours[playerId-1];
+        ctx.fillText("You are "+ colours[playerId-1], 10, 25);
+        ctx.fillStyle = "black";
+        ctx.fillText("Level: "+game.level, 10, 60);
+        ctx.fillText("Points:", 10, 95);
+        ctx.font = "25px Arial";
+        for(var i = 0; i < game.players.length; i++) {
+            ctx.fillText("Player "+(i+1)+": "+game.players[i].points, 25, 95+(30*(i+1)));
+        }
+        for(var i = 0; i < game.players.length; i++) {
+            drawWords(game.players[i].words, colours[i], ctx);
+        }
+
+    };
+    var drawWords = function(words, colour, ctx) {
+        ctx.fillStyle = colour;
+        for(var i =0;i<words.length;i++) {
+            ctx.fillText(words[i].word, words[i].vPos, words[i].hPos);
+        }
+    }
+</script>
+  <body>
+    <div style="display: inline-block; vertical-align: top">
+    <button id="createRoom" onClick="createRoom()">Create room</button>
+    <div id="rooms"></div>
+    <form action="">
+      <input id="m" autocomplete="off" /><button>Send</button>
+    </form>
+    <label id="roomNumber"></label>
+    <button id="startGame" onClick="startGame()">Start game</button>
+    </div>
+    <div style="display: inline-block">
+        <canvas id="myCanvas" width="800" height="600" style="border:1px solid #000000;">
+        </canvas>
+    </div>
+  </body>
+</html>
